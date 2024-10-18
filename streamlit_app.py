@@ -37,11 +37,7 @@ st.set_page_config(
 # Display the front end aspect
 st.markdown(html_temp, unsafe_allow_html=True)
 
-user_input = st.text_input("Enter ingredients separated by commas:")
-
-df = pd.read_csv('./Ingredients_Flattened.csv')
-
-df = df[['Recipe_Name', 'Ingredients']]
+order_input = st.text_input("Order ID")
 
 # User inputs for Databricks credentials
 st.sidebar.header('Databricks Connection Settings')
@@ -126,37 +122,41 @@ def recommend_dishes(ingredients, df, num_recommendations=5):
 #   return recommended_dishes[['Recipe_Name', 'Ingredients']]
 
 
-if st.button("Recommend"):
-  if user_input:
-    recommended_dishes = recommend_dishes(user_input, df)
-    st.subheader("Recommended Dishes:")
+def ShowRecipes(user_input, df):
+    if user_input:
+        recommended_dishes = recommend_dishes(user_input, df)
+        st.subheader("Recommended Dishes:")
 
-    if not recommended_dishes.empty:
-            # Create a dictionary to store whether the ingredients expander is open for each dish
-            expanders_open = {}
-            for idx, row in recommended_dishes.iterrows():
-                title = row['Recipe_Name']
-                cleaned_ingredients = row['Ingredients']
-                # Create an expander for each dish
-                with st.expander(f"{title}", expanded=expanders_open.get(title, False)):
-                    # Split the ingredients string at the comma
-                    ingredients_list = [ingredient.lstrip("'") for ingredient in cleaned_ingredients.split("', ")]
-                    # Remove "for serving" from each ingredient
-                    ingredients_list = [ingredient.replace('for serving', '') for ingredient in ingredients_list]
-                    # Check if the first ingredient starts with "[" and remove it
-                    if ingredients_list[0].startswith("['"):
-                        ingredients_list[0] = ingredients_list[0][2:]
-                    # Check if the last ingredient ends with ']'
-                    if ingredients_list[-1].endswith("']"):
-                        ingredients_list[-1] = ingredients_list[-1][:-2]
-                    st.markdown('\n'.join([f"- {ingredient}" for ingredient in ingredients_list]))
+        if not recommended_dishes.empty:
+                # Create a dictionary to store whether the ingredients expander is open for each dish
+                expanders_open = {}
+                for idx, row in recommended_dishes.iterrows():
+                    title = row['Recipe_Name']
+                    cleaned_ingredients = row['Ingredients']
+                    # Create an expander for each dish
+                    with st.expander(f"{title}", expanded=expanders_open.get(title, False)):
+                        # Split the ingredients string at the comma
+                        ingredients_list = [ingredient.lstrip("'") for ingredient in cleaned_ingredients.split("', ")]
+                        # Remove "for serving" from each ingredient
+                        ingredients_list = [ingredient.replace('for serving', '') for ingredient in ingredients_list]
+                        # Check if the first ingredient starts with "[" and remove it
+                        if ingredients_list[0].startswith("['"):
+                            ingredients_list[0] = ingredients_list[0][2:]
+                        # Check if the last ingredient ends with ']'
+                        if ingredients_list[-1].endswith("']"):
+                            ingredients_list[-1] = ingredients_list[-1][:-2]
+                        st.markdown('\n'.join([f"- {ingredient}" for ingredient in ingredients_list]))
+        else:
+            st.write("No recommended dishes found. Please try a different combination of ingredients.")
+                
+
     else:
-      st.write("No recommended dishes found. Please try a different combination of ingredients.")
-              
+        st.warning("Please enter ingredients to get recommendations.")
 
-  else:
-    st.warning("Please enter ingredients to get recommendations.")
 
+# if st.button("Recommend"):
+    # ShowRecipes(user_input_txt)
+ 
 # st.sidebar.header("About This App")
 # st.sidebar.info("Welcome to the Food Recommendation System! This web app suggests dishes based on the ingredients you provide.")
 # st.sidebar.info("The more ingredients you specify, the more accurate the recommendations will be.")
@@ -173,7 +173,7 @@ if st.button("Recommend"):
 
 
 # Connect to Databricks SQL warehouse/cluster
-if st.sidebar.button('Connect'):
+if st.button('Find Recipes') or st.sidebar.button('Connect'):
     try:
         conn = sql.connect(
             server_hostname='adb-7286099022455773.13.azuredatabricks.net',
@@ -181,17 +181,27 @@ if st.sidebar.button('Connect'):
             access_token=access_token
         )
         
+        # order_input = st.text_input("Order ID")
         # Sample query to fetch data
-        query = "SELECT * FROM test.sales.bronze_sales_orders LIMIT 10"
+        # query = "SELECT * FROM sandbox.promotions.pjw_hack_sales_data where sales_id = 'POS_20241016_1226_111_0017_0024'"
+        query = "SELECT * FROM sandbox.promotions.pjw_hack_sales_data where sales_id = '{}'".format(order_input)
         cursor = conn.cursor()
         cursor.execute(query)
         result = cursor.fetchall()
 
         # If results are found, display in a DataFrame
         if result:
-            df = pd.DataFrame(result, columns=[desc[0] for desc in cursor.description])
-            st.write("Query Results:")
-            st.dataframe(df)
+            df1 = pd.DataFrame(result, columns=[desc[0] for desc in cursor.description])
+            array = df1['item_name'].tolist()
+            st.write("Ingredient List for Basket: '{}'".format(order_input))
+            st.dataframe(df1['item_name'].values)
+            
+            df = pd.read_csv('./Ingredients_Flattened.csv')
+            df = df[['Recipe_Name', 'Ingredients']]
+            
+            ShowRecipes(array,df)
+            # st.write("Query Results:")
+            # st.dataframe(df)
         
         else:
             st.write("No Data Found")
