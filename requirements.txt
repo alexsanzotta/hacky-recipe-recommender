@@ -1,3 +1,4 @@
+databricks-sql-connector
 matplotlib
 pandas
 scikit_learn
